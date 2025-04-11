@@ -210,7 +210,7 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.markdown("© 2025 HealthInsight | A Student Project | Not for Clinical Use")
+    st.markdown("Not for Clinical Use")
 
 # This is the standard boilerplate that calls the main function.
 if __name__ == '__main__':
