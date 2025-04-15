@@ -72,12 +72,14 @@ def main():
         if uploaded_file:
             st.success("File successfully uploaded!")
 
+            # Read content once into memory
+            file_bytes = uploaded_file.read()
+            file_buffer = io.BytesIO(file_bytes)
+
             # Upload to S3
             st.info("Uploading file to secure cloud storage (S3)...")
-            uploaded_file.seek(0)
-
             success = upload_to_s3(
-                file_buffer=uploaded_file,
+                file_buffer=file_buffer,
                 filename=uploaded_file.name,
                 bucket=st.secrets["S3_BUCKET"],
                 aws_access_key=st.secrets["AWS_ACCESS_KEY"],
@@ -88,11 +90,11 @@ def main():
             if success:
                 st.success("File successfully uploaded to S3.")
 
+            # Load into DataFrame
             with st.spinner("Processing your bloodwork data..."):
                 time.sleep(2)
                 try:
-                    uploaded_file.seek(0)
-                    df = pd.read_csv(uploaded_file)
+                    df = pd.read_csv(io.BytesIO(file_bytes))
                     st.success(f"Successfully read {len(df)} test results.")
                 except Exception as e:
                     st.error(f"Error reading CSV: {e}")
@@ -127,7 +129,7 @@ def main():
         st.dataframe(df)
 
         if st.button("Generate Visualizations"):
-            st.markdown("### Future Visualizsation Placeholders")
+            st.markdown("### Future Visualization Placeholders")
             col1, col2 = st.columns(2)
 
             with col1:
@@ -140,6 +142,7 @@ def main():
 
             st.markdown("#### Biomarker Correlations")
             st.image("https://via.placeholder.com/800x400.png?text=Correlation+Chart")
+
     else:
         st.info("Please upload a CSV file or select the sample data option to continue.")
 
