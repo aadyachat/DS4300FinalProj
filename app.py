@@ -29,7 +29,7 @@ def upload_to_s3(file_buffer, filename, bucket, aws_access_key, aws_secret_key, 
 # Generate bar plot and return image buffer
 def generate_result_plot(df):
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.bar(df['Test'], df['Result'], color='skyblue')
+    ax.bar(df['test_name'], df['value'], color='skyblue')
     ax.set_ylabel('Result')
     ax.set_title('Blood Test Results')
     fig.tight_layout()
@@ -42,13 +42,20 @@ def generate_result_plot(df):
 # Summarize bloodwork using Ollama LLM
 def get_summary_from_ollama(df):
     prompt = f"""
-        You are a health assistant. Given this blood test data, do the following:
-        1. Summarize the data
-        2. Flag any abnormal results (outside the lower and upper limits)
-        3. For each abnormal result, suggest a **specific dietary change** that could help bring the value back into the normal range.
-        Keep the output concise and written in simple language.
+        You are a health assistant. Given this patient blood test data, do the following tasks while addressing the patient directly (first person):
 
-        Blood test data:
+        1. Summarize the reason for conducting each of the test panels.
+        2. Summarize the test panel results for the patient.
+        2. Identify any abnormal values. For each test:
+            - Use the `reference_range` column for comparison
+            - If the reference range is a range (e.g., 13.0 - 17.0), check if the value is within that range.
+            - If the reference range is bound (e.g., < 200 or > 40), compare accordingly using the operator for reference.
+        3. For each abnormal value, suggest one evidence-based dietary and lifetstyle change and cite your source.
+        4. Clearly separate "Abnormal Results" and "Normal Results" in your response.
+        5. If anything is partcularly concerning, encourage the patient to call their provider.
+
+        Here is the data:
+
         {df.to_csv(index=False)}
         """
     try:
@@ -215,12 +222,21 @@ def main():
             st.info("Using sample bloodwork data...")
             time.sleep(1)
             df = pd.DataFrame({
-                'Test': ['Hemoglobin', 'White Blood Cells', 'Platelets', 'Glucose', 'Cholesterol', 'HDL', 'LDL', 'Triglycerides'],
-                'Result': [14.2, 6.8, 250, 92, 185, 55, 110, 120],
-                'Lower Limit': [13.0, 4.5, 150, 70, None, 40, None, None],
-                'Upper Limit': [17.0, 11.0, 450, 99, 200, 60, 130, 150],
-                'Units': ['g/dL', 'k/μL', 'k/μL', 'mg/dL', 'mg/dL', 'mg/dL', 'mg/dL', 'mg/dL'],
-                'Date': ['2023-05-15'] * 8
+                'panel_category': [
+                    'CBC', 'CBC', 'CBC',
+                    'CMP', 'Lipid Panel', 'Lipid Panel', 'Lipid Panel', 'Lipid Panel'
+                ],
+                'test_name': [
+                    'Hemoglobin', 'White Blood Cells', 'Platelets',
+                    'Glucose', 'Total Cholesterol', 'HDL Cholesterol', 'LDL Cholesterol', 'Triglycerides'
+                ],
+                'date': ['2023-05-15'] * 8,
+                'value': [14.2, 6.8, 250.0, 92.0, 185.0, 55.0, 110.0, 120.0],
+                'unit': ['g/dL', 'k/μL', 'k/μL', 'mg/dL', 'mg/dL', 'mg/dL', 'mg/dL', 'mg/dL'],
+                'reference_range': [
+                    '13.0-17.0', '4.5-11.0', '150.0-450.0',
+                    '70.0-99.0', '< 200.0', '> 40.0', '< 130.0', '< 150.0'
+                ]
             })
 
             sample_buffer = io.BytesIO(df.to_csv(index=False).encode('utf-8'))

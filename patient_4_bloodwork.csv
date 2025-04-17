@@ -1,12 +1,12 @@
 panel_category,test_name,date,value,unit,reference_range
-CBC,White Blood Cell Count (WBC),2025-04-11,6.75,x10^3/uL,4.0-11.0
-CBC,Red Blood Cell Count (RBC),2025-04-11,5.5,x10^6/uL,4.2-5.9
-CBC,Hemoglobin (HGB),2025-04-11,16.61,g/dL,13.5-17.5
-CMP,Glucose,2025-04-11,5.04,mmol/L,70-99
-CMP,Calcium,2025-04-11,9.55,mg/dL,8.6-10.2
-CMP,Sodium,2025-04-11,138.59,mmol/L,135-145
-Lipid Panel,Total Cholesterol,2025-04-11,5476.9,mmol/L,<200
-Lipid Panel,LDL Cholesterol,2025-04-11,43216.26,mmol/L,<100
-Lipid Panel,HDL Cholesterol,2025-04-11,56990.4,mg/dL,>40
-Thyroid Panel,TSH (Thyroid Stimulating Hormone),2025-04-11,1.27,uIU/mL,0.4-4.0
-Thyroid Panel,Free T4,2025-04-11,13.64,pmol/L,0.8-1.8
+CBC,White Blood Cell Count (WBC),2025-04-11,6.75,x10^3/uL,4.0 - 11.0
+CBC,Red Blood Cell Count (RBC),2025-04-11,5.5,x10^6/uL,4.2 - 5.9
+CBC,Hemoglobin (HGB),2025-04-11,16.61,g/dL,13.5 - 17.5
+CMP,Glucose,2025-04-11,5.04,mmol/L,70 - 99
+CMP,Calcium,2025-04-11,9.55,mg/dL,8.6 - 10.2
+CMP,Sodium,2025-04-11,138.59,mmol/L,135 - 145
+Lipid Panel,Total Cholesterol,2025-04-11,5476.9,mmol/L,< 200
+Lipid Panel,LDL Cholesterol,2025-04-11,43216.26,mmol/L,< 100
+Lipid Panel,HDL Cholesterol,2025-04-11,56990.4,mg/dL,> 40
+Thyroid Panel,TSH (Thyroid Stimulating Hormone),2025-04-11,1.27,uIU/mL,0.4 - 4.0
+Thyroid Panel,Free T4,2025-04-11,13.64,pmol/L,0.8 - 1.8
