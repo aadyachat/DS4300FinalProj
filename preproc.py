@@ -135,7 +135,7 @@ def lambda_handler(event, context):
    processed_rows = preprocess_bloodwork_data(file_obj)
    
    # Save the cleaned file to a new bucket
-   output_bucket = 'processed-bloodtest-data'  # Your destination bucket
+   output_bucket = 'processed-bloodtest-data-sk'  # Your destination bucket
    output_key = f"processed/{os.path.basename(file_key)}"  # New file name
    
    # Convert the data back to CSV
