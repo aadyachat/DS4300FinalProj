@@ -1,100 +1,74 @@
+
 import boto3
 import pandas as pd
-import psycopg2
-import matplotlib.pyplot as plt
-import openai
+import ollama
+import os
 
-# AWS and local setup
+# AWS setup
 s3 = boto3.client('s3')
-bucket_name = 'proc-bloodtest-uploads-sk'
-object_key = 'uploaded-lab-results.csv'
-local_file = '/tmp/processed.csv'
+bucket_raw = 'raw-bloodtest-upload-sk'
+bucket_proc = 'processed-bloodtest-upload-sk'
 
-# Download the file
-s3.download_file(bucket_name, object_key, local_file)
+# List trigger files
+trigger_prefix = 'to-process/'
+trigger_objects = s3.list_objects_v2(Bucket=bucket_proc, Prefix=trigger_prefix)
 
-# Load data
-df = pd.read_csv(local_file)
+if 'Contents' not in trigger_objects:
+    print("No trigger files found.")
+    exit()
 
-# Flagging abnormal values
-def flag_value(row):
+for trigger in trigger_objects['Contents']:
+    trigger_key = trigger['Key']
+    if not trigger_key.endswith('.txt'):
+        continue
+
+    # Extract filename from trigger
+    original_filename = trigger_key.replace(trigger_prefix, '').replace('.txt', '')
+    local_file = f'/tmp/{original_filename}'
+    print(f"🟡 Processing trigger for: {original_filename}")
+
     try:
-        low, high = map(float, row['reference_range'].replace('<', '0-').replace('>', '-10000').split('-'))
-        if row['value'] < low:
-            return 'Low'
-        elif row['value'] > high:
-            return 'High'
-        else:
-            return 'Normal'
-    except:
-        return 'Check'
+        # Download original file from RAW bucket
+        s3.download_file(bucket_raw, original_filename, local_file)
+        df = pd.read_csv(local_file)
 
-df['status'] = df.apply(flag_value, axis=1)
+        # Create prompt
+        test_summary = "\n".join([
+            f"{row['test_name']}: {row['value']} {row['unit']} (Reference Range: {row['reference_range']})"
+            for _, row in df.iterrows()
+        ])
 
-# Connect to RDS
-conn = psycopg2.connect(
-    host='your-rds-endpoint',
-    database='your-db-name',
-    user='your-username',
-    password='your-password'
-)
-cur = conn.cursor()
+        prompt = f"""You are a health assistant. Given this blood test data, do the following:
 
-# Create table
-cur.execute("""
-CREATE TABLE IF NOT EXISTS lab_results (
-    id SERIAL PRIMARY KEY,
-    test_name VARCHAR(255),
-    test_date DATE,
-    value FLOAT,
-    unit VARCHAR(50),
-    reference_range VARCHAR(50),
-    status VARCHAR(50),
-    explanation TEXT
-)
-""")
+        1. Summarize the test panel
+        2. Identify any abnormal values. For each test:
+        - Use the `reference_range` column for comparison
+        - If the reference range is a range (e.g., 13.0 - 17.0), check if the value is inside it.
+        - If the reference range is a bound (e.g., < 200 or > 40), compare accordingly.
+        3. For each abnormal value, suggest one evidence-based dietary change.
+        4. Clearly separate "Abnormal Results" and "Normal Results" in your response.
 
-# Prepare for LLM
-test_summary = "\n".join([f"{row['test_name']}: {row['value']} {row['unit']} (Normal Range: {row['reference_range']})"
-                         for _, row in df.iterrows()])
+        Here is the data:
 
-# Call OpenAI LLM
-openai.api_key = 'your-openai-api-key'
+        {test_summary}
+"""  # triple quotes preserved
 
-prompt = f"""Analyze the following blood test results and explain them in simple terms.
-Highlight any abnormal values and what they might mean.
-
-{test_summary}
-
-Provide recommendations if necessary."""
-
-response = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo",
-    messages=[{"role": "user", "content": prompt}]
-)
-
-explanation_text = response.choices[0].message['content'].strip()
-
-# Insert data into RDS
-for _, row in df.iterrows():
-    cur.execute(
-        """
-        INSERT INTO lab_results (test_name, test_date, value, unit, reference_range, status, explanation)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            row['test_name'],
-            row['date'],
-            row['value'],
-            row['unit'],
-            row['reference_range'],
-            row['status'],
-            explanation_text  # Same explanation for all for simplicity
+        response = ollama.chat(
+            model='llama3',
+            messages=[{"role": "user", "content": prompt}]
         )
-    )
 
-conn.commit()
-cur.close()
-conn.close()
+        summary = response['message']['content']
 
-print("Lab results processed and saved to RDS!")
+        # Upload summary
+        output_key = f'summaries/{original_filename}-summary.txt'
+        s3.put_object(Body=summary.encode('utf-8'), Bucket=bucket_proc, Key=output_key)
+
+        print(f"✅ Summary uploaded: {output_key}")
+
+        # Clean up trigger file
+        s3.delete_object(Bucket=bucket_proc, Key=trigger_key)
+        print(f"🧹 Trigger removed: {trigger_key}\n")
+
+    except Exception as e:
+        print(f"❌ Failed to process {original_filename}: {e}\n")
