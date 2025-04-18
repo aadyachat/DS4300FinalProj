@@ -4,7 +4,6 @@ import time
 import boto3
 from botocore.exceptions import NoCredentialsError
 import io
-import ollama
 import matplotlib.pyplot as plt
 import psycopg2
 from psycopg2 import sql
@@ -39,35 +38,8 @@ def generate_result_plot(df):
     buf.seek(0)
     return buf
 
-# Summarize bloodwork using Ollama LLM
-def get_summary_from_ollama(df):
-    prompt = f"""
-        You are a health assistant. Given this patient blood test data, do the following tasks while addressing the patient directly (first person):
+# LLM processing moved to EC2
 
-        1. Summarize the reason for conducting each of the test panels.
-        2. Summarize the test panel results for the patient.
-        2. Identify any abnormal values. For each test:
-            - Use the `reference_range` column for comparison
-            - If the reference range is a range (e.g., 13.0 - 17.0), check if the value is within that range.
-            - If the reference range is bound (e.g., < 200 or > 40), compare accordingly using the operator for reference.
-        3. For each abnormal value, suggest one evidence-based dietary and lifetstyle change and cite your source.
-        4. Clearly separate "Abnormal Results" and "Normal Results" in your response.
-        5. If anything is partcularly concerning, encourage the patient to call their provider.
-
-        Here is the data:
-
-        {df.to_csv(index=False)}
-        """
-    try:
-        response = ollama.chat(
-            model='llama3',
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response['message']['content']
-    except Exception as e:
-        return f"Ollama error: {e}"
-
-# Save summary and plot to RDS
 def save_to_rds(summary_text, plot_bytes, filename):
     db_config = {
         'dbname': st.secrets["RDS_CONFIG"]["dbname"],
@@ -142,6 +114,35 @@ def display_loading_animation(text="Processing..."):
     """, unsafe_allow_html=True)
 
 # Streamlit UI
+
+def load_summary_from_s3(filename):
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
+        aws_secret_access_key=st.secrets["AWS_SECRET_KEY"],
+        region_name=st.secrets.get("AWS_REGION", "us-east-1")
+    )
+    key = f"summaries/{filename}-summary.txt"
+    st.write("📂 Looking for summary at:", key)
+    try:
+        obj = s3.get_object(Bucket=st.secrets["S3_BUCKET_PROC"], Key=key)
+        return obj["Body"].read().decode("utf-8")
+    except Exception as e:
+        return f"⏳ Summary not available yet. (EC2 may still be processing)\n\nError: {e}"
+    
+def notify_ec2_to_process(filename):         
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
+        aws_secret_access_key=st.secrets["AWS_SECRET_KEY"],
+        region_name=st.secrets.get("AWS_REGION", "us-east-1")
+    )
+    s3.put_object(
+        Bucket=st.secrets["S3_BUCKET_PROC"],
+        Key=f"to-process/{filename}.txt",
+        Body=filename.encode('utf-8')
+    )
+
 def main():
     st.set_page_config(
         page_title="HealthInsight - Bloodwork Analyzer",
@@ -190,6 +191,8 @@ def main():
 
     if uploaded_file or use_sample:
         if uploaded_file:
+            notify_ec2_to_process(uploaded_file.name)
+
             st.success("File successfully uploaded!")
             file_bytes = uploaded_file.read()
             file_buffer = io.BytesIO(file_bytes)
@@ -256,8 +259,13 @@ def main():
         if st.button("Generate Visualizations and Summary"):
             st.markdown("### Summary and Insights")
 
-            summary = get_summary_from_ollama(df)
-            st.text_area("Summary from LLM", summary, height=200)
+            summary = ""
+            if uploaded_file:
+                summary = load_summary_from_s3(uploaded_file.name)
+                st.subheader("💬 LLM Summary")
+                st.write("🔎 Looking for summary key:", f"summaries/{uploaded_file.name}-summary.txt")
+                st.text_area("Explanation", summary, height=300)
+
 
             plot_buf = generate_result_plot(df)
             st.image(plot_buf)
