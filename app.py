@@ -332,7 +332,7 @@ def load_summary_from_s3(filename):
    )
    key = f"summaries/{filename}-summary.txt"
    try:
-       obj = s3.get_object(Bucket=st.secrets["S3_BUCKET_NORMAL"], Key=key)
+       obj = s3.get_object(Bucket=st.secrets["S3_BUCKET_PROC"], Key=key)
        return obj["Body"].read().decode("utf-8")
    except Exception as e:
        return f"⏳ Summary not available yet. (EC2 may still be processing)\n\nError: {e}"
@@ -345,7 +345,7 @@ def notify_ec2_to_process(filename):
        region_name=st.secrets.get("AWS_REGION", "us-east-2")
    )
    s3.put_object(
-       Bucket=st.secrets["S3_BUCKET_NORMAL"],
+       Bucket=st.secrets["S3_BUCKET_PROC"],
        Key=f"to-process/{filename}.txt",
        Body=filename.encode('utf-8')
    )
@@ -666,7 +666,7 @@ def main():
            upload_to_s3(
                sample_buffer,
                filename="sample_data.csv",
-               bucket=st.secrets["S3_BUCKET_NORMAL"],
+               bucket=st.secrets["S3_BUCKET_PROC"],
                aws_access_key=st.secrets["AWS_ACCESS_KEY"],
                aws_secret_key=st.secrets["AWS_SECRET_KEY"]
            )
